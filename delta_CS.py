@@ -566,10 +566,13 @@ def output_RMSE_ppm_BB(dataframe):
     for atomtype in atomtype_bb:
         #retrieve values for one atomtype
         atoms=dataframe[(dataframe.atomtype==atomtype) & (dataframe.error_squared>0)]
-        counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
-        RMSE=(sum(atoms.error_squared.to_list())/len(atoms))**0.5
-        ne=pd.DataFrame([[atomtype,RMSE,len(atoms)]],columns=['Atom Type','RMSE','Entries used'])
-        df_RMSE_BB=df_RMSE_BB.append(ne,ignore_index=True)
+        try: 
+            counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
+            RMSE=(sum(atoms.error_squared.to_list())/len(atoms))**0.5
+            ne=pd.DataFrame([[atomtype,RMSE,len(atoms)]],columns=['Atom Type','RMSE','Entries used'])
+            df_RMSE_BB=df_RMSE_BB.append(ne,ignore_index=True)
+        except ZeroDivisionError:
+            print('For the backbone RMSE predictions, I could not find  predictions for the atomtype {}. Maybe your experimental data contained no entries for it.'.format(atomtype))
     #    ChiSq_red=
         
     print(df_RMSE_BB)
@@ -594,11 +597,14 @@ def output_chi_squared_BB(dataframe):
     for atomtype in atomtype_bb:
         #retrieve values for one atomtype
         atoms=dataframe[(dataframe.atomtype==atomtype )& (dataframe.ChiSq>0)]
-        counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
-        ChiSq_red=sum(atoms['ChiSq'])/len(atoms['ChiSq'])
+        try:
+            counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
+            ChiSq_red=sum(atoms['ChiSq'])/len(atoms['ChiSq'])
     #    ChiSq_red=
-        ne=pd.DataFrame([[atomtype,ChiSq_red,len(atoms)]],columns=['Atom Type','Chi-2 reduced','Entries used'])
-        df_chi_BB=df_chi_BB.append(ne,ignore_index=True)
+            ne=pd.DataFrame([[atomtype,ChiSq_red,len(atoms)]],columns=['Atom Type','Chi-2 reduced','Entries used'])
+            df_chi_BB=df_chi_BB.append(ne,ignore_index=True)
+        except ZeroDivisionError:
+            print('For the backbone reduced Chi-square predictions, I could not find predictions for the atom type {}. Maybe experimental data contained no entries for it.'.format(atomtype))
     #    print('{}    ;   {}   ;   {}'.format(atomtype,ChiSq_red,len(atoms)))
     print(df_chi_BB)
     sys.stdout = orig_stdout
@@ -665,9 +671,12 @@ def output_chi_squared_H_ppm(dataframe):
         if (row['residue'],row['atomtype']) not in computed:
             computed.add((row['residue'],row['atomtype']))
             sel=protons[(protons.residue==row['residue']) & (protons.atomtype==row['atomtype']) & (protons.ChiSq>0)]
-            chiSq_red=sum(sel['ChiSq'])/len(sel['ChiSq'])
-            ne=pd.DataFrame([[row['residue'],row['atomtype'],chiSq_red,len(sel)]],columns=['residue','Atom Type','Chi-2 reduced','Entries used'])
-            df_chi_Hs=df_chi_Hs.append(ne,ignore_index=True)
+            try: 
+                chiSq_red=sum(sel['ChiSq'])/len(sel['ChiSq'])
+                ne=pd.DataFrame([[row['residue'],row['atomtype'],chiSq_red,len(sel)]],columns=['residue','Atom Type','Chi-2 reduced','Entries used'])
+                df_chi_Hs=df_chi_Hs.append(ne,ignore_index=True)
+            except ZeroDivisionError:
+                print('No entries for proton type {}.'.format(row['atomtype']))
         else: 
             pass
     print(df_chi_Hs)
@@ -768,10 +777,12 @@ if __name__=='__main__':
     output_RMSE_ppm_BB(df_merged)
     output_chi_squared_BB(df_merged)
     output_chi_squared_H_ppm(df_merged)
-    
+    df_merged.to_csv('summary_PPM.csv')
+
     if bool(args.ch3_shift):
 
         output_chi_squared_C_ch3shift(ch3shift)
+        ch3shift.to_csv('summary_CH3shift.csv')
     
     #mapping PPM chi squared
     newPDB=PandasPdb().read_pdb(args.reference)
