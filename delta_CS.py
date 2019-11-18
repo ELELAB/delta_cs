@@ -549,11 +549,25 @@ def mapping_to_pdb(reference,index,versionPDB='PDBV3',ch3shift_data=None,onlyBB=
                     print('I could not find in the PDB the atom {} of residue {} when mapping the ChiSq'.format(row['atomtype'],row['residue']))
     print('Done with PDB mapping')
     return reference_copy
+
+
+def mapping_BB_chi_per_residue(reference,index):
+    '''This function calculates the average of the BB chi-squares per residue, and sets the b-factor of all the atoms in the residue to that average value. Residues with no chi-squares are set their b-factors to -1 so we can distinguish properly "no information" from "low chi-squared".'''
+    reference_copy=reference.copy()
+    reference_copy['b_factor']=-1
+    atomtype_bb=['C','CB','CA','N','H','HA']
+    list_of_residue_numbers=list(set(index['idPDB']))
+
+    for resid in list_of_residue_numbers:
+        residue=index.loc[(index['idPDB']==resid )& (index['atomtype'].isin(atomtype_bb))  &  (index['ChiSq']>0)]
+        mean=residue['ChiSq'].mean()
+        sel=reference_copy[reference_copy.residue_number==resid]
+        reference_copy.at[sel.index,'b_factor']=mean
+    reference_copy.at[reference_copy['b_factor'].apply(np.isnan),'b_factor']=-1
+    return reference_copy
    
     
-
-
-################# OUTPUT FUNCTIONS #############################################
+######## OUTPUT FUNCTIONS #############################################
 def output_RMSE_ppm_BB(dataframe):
     atomtype_bb=['C','CB','CA','N','H','HA']
 
@@ -788,6 +802,11 @@ if __name__=='__main__':
     newPDB=PandasPdb().read_pdb(args.reference)
     newPDB.df['ATOM']=mapping_to_pdb(newPDB.df['ATOM'],df_merged,versionPDB=versionPDB)
     newPDB.to_pdb(path='reference_chi_squared_ppm.pdb')
+   
+    #mapping PPM BB-average chi-squared per residue. 
+    PDB_BB_average_per_residue=PandasPdb().read_pdb(args.reference)
+    PDB_BB_average_per_residue.df['ATOM']= mapping_BB_chi_per_residue(PDB_BB_average_per_residue.df['ATOM'],df_merged)
+    PDB_BB_average_per_residue.to_pdb(path='reference_BB_chi_squared_averaged_residue_ppm.pdb')
     
     if bool(args.ch3_shift):
 
