@@ -58,21 +58,21 @@ parser.print_help()
 ###############################################################################
 
 def process_bmrb(filename,name):
-    file_pr=open(str(name),'w')
-    file=open(filename,'r')
+    try:
+        file_pr=open(str(name),'w')
+        file=open(filename,'r')
+    except FileNotFoundError as err: 
+        print('There is no ppm output file under that name')
+
+
     lines=file.readlines()
     start=0
     for line in lines: 
         if start==True:
-#            print('xxxxx')
-#            print(line)
             if re.match(r'\s+[0-9]+\s+[0-9]+.+',line):
-#                print(line)
                 file_pr.write(line)
         elif re.match(r'\s+_Chem_shift_ambiguity_code\s*',line):
             start=True
-#            print('starting now')
-#            print(line)
     file_pr.close()
     
     
@@ -117,14 +117,10 @@ def renumber_sequentially(index,col1,col2):
     idx=0 #the new resID will start at 0
     for i, row in index.iterrows():
          if row[col1]!=resID_pre:
-#             print(i,resID_pre,row['resID_old'])
-#             print(counter)
              list_ids=list_ids + counter*[idx]
              counter=1
              idx+=1
              list_residues.append(row[col2])
-#             if row['resID_old'] < resID_pre:
-#                 index['Chain'].loc[row.name:]='B'
              resID_pre=row[col1]
 
          else:
@@ -138,27 +134,29 @@ def renumber_sequentially(index,col1,col2):
 
 
 def experimental_df(entry):
-    '''This function takes a bmrb code or a path to a NMR-STAR and returns a pandas dataframe. '''
-    if re.match('[0-9]+',entry):
+    '''Takes a bmrb entry number or a NMR-star file and creates a pandas DataFrame'''
+
+    if os.path.isfile(entry):
+        print("You are submitting a .txt data file with experimental chemical shift entries")
+        try:
+            entryExp=pynmrstar.Entry.from_file(entry)
+        except FileNotFoundError as err: #Hd
+            print('The entry file you submitted is not valid.\n',err)
+            sys.exit('The entry file you submitted is not a valid one. Please, check it that you are submitting the right file.')
+
+    elif re.match('[0-9]+',entry):
         entry=int(entry)
-    else:
-        print('You have provided a text file of the BMRB entry.' )
-    
-    if type(entry)==int:
+        print("You are trying to retrieve the chemical shift dataset deposited in the BMRB data base under the number {}.".format(entry))
         try:
             entryExp= pynmrstar.Entry.from_database(entry)
         except OSError as err:
             print('The entry number you submitted is not right. ',err)
-            return None
-    elif type(entry)==str:
-        try:
-            entryExp=pynmrstar.Entry.from_file(entry)
-        except FileNotFoundError as err: #Hd
-            print('The entry file you submitted is not there.\n',err)
-            return None
+            sys.exit('There is no data set under the number alias you have provided. Check for mistakes and try again.')
+
     else: 
         raise Exception('You must provide a file path or a bmrb entry code')
-        return None
+        sys.exit('Provide a right input in the form of bmbr entry number or NMR-star file')
+
     #defines a list with all the atoms in the structure
     cs_results_sets=[]
     cs_results_sets_list=[]
@@ -217,8 +215,8 @@ def experimental_df(entry):
 def predicted_df(filename):
     '''predicted_df returns a dataframe with the predictions from ppm contained in the file 'filename' AND
     a the 1-letter sequence of the sequence or residues in the form: dataframe, seq'''
-    cwd = os.getcwd()
-    path=os.path.join(cwd, filename)
+    
+    path=os.path.abspath(filename)
     
     #processes output bmrb file from pp by trimming unncessary lines
     process_bmrb(path,'bmrb_pre_pro.dat') 
@@ -239,10 +237,12 @@ def predicted_df(filename):
 def predicted_ch3(filename):
     '''predicted_ch3 returns a dataframe with the predictions of ch3shift.'''
     #open the file
-    cwd = os.getcwd()
-    path=os.path.join(cwd, filename)
-    file=open(path, 'r')
-    
+    path=os.path.abspath(filename)
+    try:
+        file=open(path, 'r')
+    except FileNotFoundError as err: 
+        print('The file with ch3shift that you have given does not exist') 
+
     #read lines
     lines=file.readlines()
     trimmed_lines=[] #list with the new modified lines
@@ -323,7 +323,7 @@ def alignment(seq1,seq2,return_matches=False):
     alignment_seq1_original_align=pairwise2.align.globalxx(seq1,consensus)
     matches_seq1= match_index(alignment_seq1_original_align[0])
     
-    assert(type(return_matches)==bool,'return_matches must be True or False')
+   # assert(type(return_matches)==bool,'return_matches must be True or False')
     if return_matches==True:
         return consensus,matches_seq1,matches_seq2
     else:  
@@ -598,28 +598,31 @@ def output_RMSE_ppm_BB(dataframe):
 
 
 def output_chi_squared_BB(dataframe):
-    atomtype_bb=['C','CB','CA','N','H','HA']
+    atomtype_bb = ['C','CB','CA','N','H','HA']
     print('Preparing output for ChiSq for H,HA,C,CB,CA and N ...')
 
     orig_stdout = sys.stdout
-    df_chi_BB=pd.DataFrame(columns=['Atom Type','Chi-2 reduced','Entries used'])
+    df_chi_BB = pd.DataFrame(columns=['Atom Type','Chi-2 reduced','STD', 'Entries used'])
     
     f = open('output_chi_squared_BB.txt', 'w')
     sys.stdout = f
     
     counts_per_atom_type={}
     for atomtype in atomtype_bb:
+
         #retrieve values for one atomtype
-        atoms=dataframe[(dataframe.atomtype==atomtype )& (dataframe.ChiSq>0)]
+        atoms = dataframe[ (dataframe.atomtype==atomtype) & (dataframe.ChiSq>0) ]
+        
         try:
             counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
-            ChiSq_red=sum(atoms['ChiSq'])/len(atoms['ChiSq'])
-    #    ChiSq_red=
-            ne=pd.DataFrame([[atomtype,ChiSq_red,len(atoms)]],columns=['Atom Type','Chi-2 reduced','Entries used'])
-            df_chi_BB=df_chi_BB.append(ne,ignore_index=True)
+            ChiSq_red = atoms['ChiSq'].mean()
+            std_ChiSq_red = atoms['ChiSq'].std()
+            ne = pd.DataFrame([ [atomtype, ChiSq_red, std_ChiSq_red, len(atoms)] ], columns = ['Atom Type','Chi-2 reduced', 'STD', 'Entries used'])
+            df_chi_BB = df_chi_BB.append(ne, ignore_index=True)
+        
         except ZeroDivisionError:
             print('For the backbone reduced Chi-square predictions, I could not find predictions for the atom type {}. Maybe experimental data contained no entries for it.'.format(atomtype))
-    #    print('{}    ;   {}   ;   {}'.format(atomtype,ChiSq_red,len(atoms)))
+    
     print(df_chi_BB)
     sys.stdout = orig_stdout
     f.close()
