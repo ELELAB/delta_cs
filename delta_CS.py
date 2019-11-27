@@ -37,7 +37,8 @@ import biopandas
 from biopandas.pdb import *
 import argparse
 import pynmrstar
-
+from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
 ###############################################################################
 ###############              PARSING ARGUMENTS              ###################
 ###############################################################################
@@ -566,113 +567,138 @@ def mapping_BB_chi_per_residue(reference,index):
     reference_copy.at[reference_copy['b_factor'].apply(np.isnan),'b_factor']=-1
     return reference_copy
    
-    
+def histogram_plotter(data, step=0.1, feature='Chi-Sq reduced', name='histogram_plot',title='Histogram'): 
+    data = np.array(data)
+    bins_max = min((max(data),5))
+    label = '{:.2f} % of predictions'.format(len(data[data<bins_max])/len(data) * 100)
+    bins = np.arange(0, bins_max, step)
+    data_entries, bins = np.histogram(data, bins = bins)
+    binscenters = np.array( [0.5 * (bins[i] + bins[i+1]) for i in range(len(bins)-1)] ) 
+    plt.figure()
+    plt.bar(binscenters,data_entries/sum(data_entries),width= 0.8 * ( (bins_max)/len(binscenters) ), color = 'navy',label=label)
+    plt.xlabel(feature)
+    plt.ylabel('frequency')
+    plt.legend()
+    plt.title(title)
+    plt.savefig(name)
+#    
+#def gaussian_fitting_parameters(data, name='histogram'):
+#    '''Takes an index object (pandas' dataframe column), fits the binned data to a Gaussian distribution, 
+#    print histogram with real data and fitted curve and returns the values of sigma and mu (std and mean) 
+#    of the fitted curve'''
+#    data = np.array(data)
+#    gaussian_fit = lambda x,a,b,c : a * np.exp(-(x - b)**2.0 / (2 * c**2))
+#    bins = np.arange(0, max(data), 0.2) 
+#    data_entries, bins = np.histogram(data, bins = bins)
+#    print(data_entries)
+#    binscenters = np.array([0.5 * (bins[i] + bins[i+1]) for i in range(len(bins)-1)])
+#    try:
+#    #curve fitting
+#        popt, pcov =  curve_fit(gaussian_fit, xdata=binscenters, ydata=data_entries, p0=[10,1,1])
+#    
+#    #plotting
+#        x_space = np.arange(0, max(data), 0.01) 
+#        plt.figure()
+#        plt.bar(binscenters, data_entries, color = 'navy')
+#        plt.plot(x_space, gaussian_fit(x_space,popt), color = 'darkorange', linewidth = 2, 
+#            label = r'$\sigma$ = {}, $\mu$ = {}'.format(popt[2],popt[1]))
+#
+#        plt.legend()
+#        plt.savefig(name)
+#        return popt[1], popt[2]
+#
+#    except: 
+#        plt.figure()
+#        plt.bar(binscenters, data_entries, color = 'navy')
+#        plt.savefig(name)
+#
+#        return np.nan, np.nan
+#
+
+
+   
+   
 ######## OUTPUT FUNCTIONS #############################################
 def output_RMSE_ppm_BB(dataframe):
-    atomtype_bb=['C','CB','CA','N','H','HA']
 
-    print('Preparing output for RMSE for H,HA,C,CB,CA and N')
-    df_RMSE_BB=pd.DataFrame(columns=['Atom Type','RMSE','Entries used'])
-    orig_stdout = sys.stdout
-    f = open('output_RMSE_ppm_BB.txt', 'w')
-    sys.stdout = f
+    print('Preparing output for RMSE for H,HA,C,CB,CA and N ...')
+    atomtype_bb = ['C','CB','CA','N','H','HA']
+    df_RMSE_BB = pd.DataFrame( columns = ['Atom Type','RMSE','Entries used'] )
     counts_per_atom_type={}
+
     for atomtype in atomtype_bb:
         #retrieve values for one atomtype
-        atoms=dataframe[(dataframe.atomtype==atomtype) & (dataframe.error_squared>0)]
+        atoms = dataframe[ (dataframe.atomtype==atomtype) & (dataframe.error_squared>0 )]
         try: 
-            counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
-            RMSE=(sum(atoms.error_squared.to_list())/len(atoms))**0.5
-            ne=pd.DataFrame([[atomtype,RMSE,len(atoms)]],columns=['Atom Type','RMSE','Entries used'])
-            df_RMSE_BB=df_RMSE_BB.append(ne,ignore_index=True)
+            #counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
+            RMSE = (sum(atoms.error_squared.to_list())/len(atoms))**0.5
+            ne = pd.DataFrame([[atomtype,RMSE,len(atoms)]],columns=['Atom Type','RMSE','Entries used'])
+            df_RMSE_BB = df_RMSE_BB.append(ne,ignore_index=True)
         except ZeroDivisionError:
             print('For the backbone RMSE predictions, I could not find  predictions for the atomtype {}. Maybe your experimental data contained no entries for it.'.format(atomtype))
-    #    ChiSq_red=
-        
-    print(df_RMSE_BB)
-    sys.stdout = orig_stdout
-    f.close()
+
+       
     pd.DataFrame.to_csv(df_RMSE_BB,path_or_buf='output_RMSE_ppm_BB.csv',index=False)
     print('Done')
 
 
 
 def output_chi_squared_BB(dataframe):
-    atomtype_bb = ['C','CB','CA','N','H','HA']
     print('Preparing output for ChiSq for H,HA,C,CB,CA and N ...')
-
-    orig_stdout = sys.stdout
-    df_chi_BB = pd.DataFrame(columns=['Atom Type','Chi-2 reduced','STD', 'Entries used'])
-    
-    f = open('output_chi_squared_BB.txt', 'w')
-    sys.stdout = f
-    
+    atomtype_bb = ['C','CB','CA','N','H','HA']
+    df_chi_BB = pd.DataFrame(columns=['Atom Type','Chi-2 reduced', 'Entries used'])
     counts_per_atom_type={}
     for atomtype in atomtype_bb:
-
-        #retrieve values for one atomtype
         atoms = dataframe[ (dataframe.atomtype==atomtype) & (dataframe.ChiSq>0) ]
-        
         try:
             counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
-            ChiSq_red = atoms['ChiSq'].mean()
-            std_ChiSq_red = atoms['ChiSq'].std()
-            ne = pd.DataFrame([ [atomtype, ChiSq_red, std_ChiSq_red, len(atoms)] ], columns = ['Atom Type','Chi-2 reduced', 'STD', 'Entries used'])
+            ChiSq_red= atoms['ChiSq'].mean()
+            ne = pd.DataFrame([ [atomtype, ChiSq_red, len(atoms)] ],
+                    columns = ['Atom Type','Chi-2 reduced','Entries used'])
             df_chi_BB = df_chi_BB.append(ne, ignore_index=True)
-        
+            try:
+                histogram_plotter(atoms['ChiSq'], step=0.1, feature=r'$\chi^2_{red}$', name='histogram_plot_{}'.format(atomtype),title='{}'.format(atomtype))
+            except:
+                print('There was a problem generating histograms of BB chemical shifts for the atom type {}'.format(atomtype))
+ 
         except ZeroDivisionError:
             print('For the backbone reduced Chi-square predictions, I could not find predictions for the atom type {}. Maybe experimental data contained no entries for it.'.format(atomtype))
-    
-    print(df_chi_BB)
-    sys.stdout = orig_stdout
-    f.close()
     pd.DataFrame.to_csv(df_chi_BB,path_or_buf='output_chi_squared_BB.csv',index=False)    
     print('Done')
 
-
 def output_chi_squared_C_ch3shift(dataframe):
     print('Preparing output for Cs of CH3shift.')
-    orig_stdout = sys.stdout
-    df_chi_c=pd.DataFrame(columns=['residue','Atom Type','Chi-2 reduced','Entries used'])
-    f = open('output_chi_squared_C_ch3shift.txt', 'w')
-    sys.stdout = f
-    carbons_ch3={'LEU':['CD1','CD2'],'ILE':['CG2','CD'],'VAL':['CG1','CG2'],'THR':['CG2']}
+    df_chi_c = pd.DataFrame(columns=['residue','Atom Type','Chi-2 reduced','STD', 'Entries used'])
+    carbons_ch3 = {'LEU':['CD1','CD2'],'ILE':['CG2','CD'],'VAL':['CG1','CG2'],'THR':['CG2']}
+
+
     #### Compute chi-2 metrics ###  
-    #print('{} ;  {} ;  {} ;   {}'.format('residue','Atom type', 'Chi-Sq reduced','# entries used'))
-    
     for key in carbons_ch3.keys():
         for at in carbons_ch3[key]:
             
             ## selects all the atoms of a residue type (e.g.: LEU) and of a certain atomtype (e.g.:CD2).
             ## So the idea is that at the end of the iteration, we have an average chi-sq for e.g. all CD2s of all LEUs. 
-            sel_atomtype=ch3shift[(ch3shift.residue==key)&(ch3shift.atomtype==at)&(ch3shift.ChiSq>0.00)]
+            sel_atomtype = ch3shift[ (ch3shift.residue==key) & (ch3shift.atomtype==at) & (ch3shift.ChiSq>0.00)]
             if len(sel_atomtype)>0:
-                chiSq_red=sum(sel_atomtype['ChiSq'])/len(sel_atomtype['ChiSq'])
-                ne=pd.DataFrame([[key,at,chiSq_red,len(sel_atomtype)]],columns=['residue','Atom Type','Chi-2 reduced','Entries used'])
+                chiSq_red = sel_atomtype.mean()
+                std_chiSq_red = sel_atomtype.std() 
+                ne=pd.DataFrame( [[key,at,chiSq_red,std_chiSq_red,len(sel_atomtype)]], columns = ['residue','Atom Type','Chi-2 reduced','STD','Entries used'] )
                 df_chi_c=df_chi_c.append(ne,ignore_index=True)
-    #            print('Chi-2 reduced for {} of {} is: {}'.format(at,key,chiSq_red))
-    #            print('{}  ;  {}  ;  {}   ;  {}'.format(key,at,chiSq_red,len(sel_atomtype)))
+
             else:
-    #            print('{}  ;   {}   ;   {}   ;   {}'.format(key,at,np.nan,np.nan))  
                 ne=pd.DataFrame([[key,at,np.nan,np.nan]],columns=['residue','Atom Type','Chi-2 reduced','Entries used'])
                 df_chi_c=df_chi_c.append(ne,ignore_index=True)
                 
-    print('# np.nan means that atom is not in structure or no experimental information has been made available')
-    print(df_chi_c)
-    sys.stdout = orig_stdout
-    f.close()
     pd.DataFrame.to_csv(df_chi_c,path_or_buf='output_chi_squared_C_ch3shift.csv',index=False)   
     print('Done')
 
 
-
 def output_chi_squared_H_ppm(dataframe):  
     print('Preparing output for the ChiSq of side-chain hydrogens predictions from PPM ...')
-    orig_stdout = sys.stdout
 
     #obtain list of protons 
     regex=dataframe.atomtype.str.match(r'H[B-Z]+[1-9]*')
-    protons=dataframe[(regex) & dataframe.ChiSq>0]
+    protons=dataframe[(regex) & (dataframe.ChiSq>0)]
     
     #set with computed atomtypes so far so avoid repetitions
     computed=set()
@@ -680,10 +706,7 @@ def output_chi_squared_H_ppm(dataframe):
     #data frame for data storage 
     df_chi_Hs=pd.DataFrame(columns=['residue','Atom Type','Chi-2 reduced','Entries used'])
     
-    #creates outputfile
-    f = open('output_chi_squared_H_ppm.txt', 'w')
-    sys.stdout = f
-    
+  
     for index,row in protons.iterrows():
         if (row['residue'],row['atomtype']) not in computed:
             computed.add((row['residue'],row['atomtype']))
@@ -696,23 +719,22 @@ def output_chi_squared_H_ppm(dataframe):
                 print('No entries for proton type {}.'.format(row['atomtype']))
         else: 
             pass
-    print(df_chi_Hs)
-    sys.stdout = orig_stdout
-    f.close() #closes output file
-    
+  
+     
     #creates csv file with results
     pd.DataFrame.to_csv(df_chi_Hs,path_or_buf='output_chi_squared_H_ppm.csv',index=False)
     print('Done')
 #    
-    
+
+   
     
     
     
 
     
-###############################################################################
+#yy##############################################################################
 ###############              EXECUTION                        ################
-###############################################################################
+#y##############################################################################
  
     
     
@@ -729,6 +751,8 @@ if __name__=='__main__':
         referencepdb=PandasPdb().read_pdb(reference)
         reference_df=referencepdb.df['ATOM']
         reference_df=renumber_sequentially(reference_df,'residue_number','residue_name')
+        referencepdb.df['ATOM'] = renumber_sequentially(reference_df,'residue_number','residue_name')
+ 
 
     except FileNotFoundError as err:
         print(err, '\n', 'The path of the reference PDB is not right. Please, check again. ')
@@ -738,26 +762,26 @@ if __name__=='__main__':
     check_nomenclature(reference_df,versionPDB=versionPDB)
         
     #Creates pandas data frame for experimental and predictions. 
-    experimental,seq_exp=experimental_df(args.experimental) #args.experimental
-    predicted,seq_pre=predicted_df(args.bmrb_pre) #args.bmrb_pre
+    experimental, seq_exp = experimental_df(args.experimental) #args.experimental
+    predicted, seq_pre = predicted_df(args.bmrb_pre) #args.bmrb_pre
     
     #renumbers according to PDB numbering. New numbering goes into column idPDB
-    experimental=renumbering_to_reference(args.reference,experimental)
-    predicted=renumbering_to_reference(args.reference,predicted)
+    experimental = renumbering_to_reference(args.reference,experimental)
+    predicted = renumbering_to_reference(args.reference,predicted)
 
 
     #addition of experimental data to 
-    left=predicted
-    right=experimental.loc[:,['idPDB','residue','atomtype','CS_exp','error_exp','id_seq']]
+    left = predicted
+    right = experimental.loc[:,['idPDB','residue','atomtype','CS_exp','error_exp','id_seq']]
     
     
     #df_compiled contains the merged data of experimental and predicted
-    df_merged=pd.merge(left, right, how='outer', on=['idPDB','residue','atomtype'], left_on=None, right_on=None,
+    df_merged = pd.merge(left, right, how='outer', on=['idPDB','residue','atomtype'], left_on=None, right_on=None,
          left_index=True, right_index=False, sort=True,
          suffixes=('_x', '_y'), copy=True, indicator=True,
          validate=None)
-    df_merged.index=range(len(df_merged))
-    df_merged=df_merged[df_merged.idPDB>0].loc[:,['idPDB','residue','atomtype','CS','CS_exp','error_exp','_merge']]
+    df_merged.index = range(len(df_merged))
+    df_merged = df_merged[df_merged.idPDB>0].loc[:,['idPDB','residue','atomtype','CS','CS_exp','error_exp','_merge']]
     
     #add_error of PPM 
     df_merged=add_error_ppm(df_merged)
@@ -820,5 +844,6 @@ if __name__=='__main__':
         
 
 ##################################################################################################3
-        
-#    
+       
+    
+
