@@ -803,26 +803,7 @@ if __name__=='__main__':
         if args.pdb_mapping=='yes':
             results.PDBmapping(plotarg = 'CH3_carbons')
         ch3shift.to_csv('summary_CH3shift.csv')
-#    
-#    #mapping PPM chi squared
-#    newPDB=PandasPdb().read_pdb(args.reference)
-#    newPDB.df['ATOM']=mapping_to_pdb(newPDB.df['ATOM'],df_merged,versionPDB=versionPDB)
-#    newPDB.to_pdb(path='reference_chi_squared_ppm.pdb')
-#   
-#    #mapping PPM BB-average chi-squared per residue. 
-#    PDB_BB_average_per_residue=PandasPdb().read_pdb(args.reference)
-#    PDB_BB_average_per_residue.df['ATOM']= mapping_BB_chi_per_residue(PDB_BB_average_per_residue.df['ATOM'],df_merged)
-#    PDB_BB_average_per_residue.to_pdb(path='reference_BB_chi_squared_averaged_residue_ppm.pdb')
-#    
-#    if bool(args.ch3_shift):
-#
-#        #mappinig ch3shift chi squared
-#        newPDB=PandasPdb().read_pdb(args.reference)
-#        newPDB.df['ATOM']=mapping_to_pdb(newPDB.df['ATOM'],ch3shift,versionPDB=versionPDB,ch3shift_data=True)
-#        newPDB.to_pdb(path='reference_chi_squared_ch3shift.pdb')
-#        
-
-##################################################################################################3
+#################################################################################################3
        
     
 
