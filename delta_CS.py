@@ -50,6 +50,13 @@ parser.add_argument('-ch3shift','--ch3_shift',type=str, help='Name of the output
 parser.add_argument('-ref','--reference',type=str, help='Name of the pdb-file used as reference')
 parser.add_argument('-pdb_nom','--pdb_nom',type=int, help='Version of the PDB nomenclature'
                     'used in your reference structure. Check the nomenclature.txt file and choose 2 if it is using the one under PDBV2 or 3 for the one under PDBV3. You can modify single entries to correct for discrepancies')
+parser.add_argument('-pdb_mapping','--pdb_mapping',type=str, help='True if you want the reduced chi-squared results to be mapped onto a pdb. Default is yes', default='yes')
+parser.add_argument('-histograms','--histograms',type=str, help='True if you want  histograms with backbone chi-squares. Default is yes', default='yes')
+
+
+
+
+
 
 args=parser.parse_args()
 parser.print_help()
@@ -364,6 +371,32 @@ def bmrb_to_pdb(residue,atomtype,versionPDB='PDBV3'):
     return atomInPDB.to_list()[0]
 
 
+def bmrb_to_pdb2(row):
+    '''This function takes a row and returns the PDB nomenclature for that atomtype. It handles
+    especial cases with equivalent protons. E.g. ppm might generate just one prediction for 
+    Ala HB1 and Ala HB2 under the name Ala HB. This function corrects that. The PDB nomeclature is
+    returns as a list, e.g.: ['CA'], ['HB1','HB2]'''
+    
+    table=pd.read_csv('nomenclature.txt',delim_whitespace=True)
+    try:
+        
+        atomInPDB=table[(table.residue==row['residue']) & (table.BMRB==row['atomtype'])][versionPDB]
+        return [atomInPDB.to_list()[0]]
+
+    except:
+        try: 
+            h_type = re.match(r'H[B-Z]+[1-9]*',row['atomtype'])[0]
+            if h_type :
+                matches_in_nom = table[table.BMRB.str.match(h_type) & (table.residue == row['residue'])]
+                list_matches = matches_in_nom[versionPDB].to_list()
+                return list_matches
+        except:
+            print('BMRB atom type {} not found in the nomenclature directory'.format(row['atomtype']))
+            return None
+
+#    print(atomInPDB)
+    
+
 
 def pdb_to_bmrb(residue,atomtype,versionPDB=3):
     
@@ -452,8 +485,12 @@ def add_error_ppm(index):
 
     return copy
 
+            
+        
+
+
 def eliminate_duplicate_hydrogens(index):
-    '''This function should correct ... '''
+    '''This function should correct for the presence of equivalent redundant protons. E.g. HD1 and HD11,HD12,HD13 '''
     try:
         print('Eliminating duplicated hydrogens resulting from different nomenclatures ...')
         copy=index.copy()
@@ -493,8 +530,9 @@ def eliminate_duplicate_hydrogens(index):
         print(err)
                                 
     return copy
-def test():
-    print('x')
+
+
+
 
 
 def add_experimental_data_to_ch3shift(ch3shift,experimental):
@@ -517,55 +555,7 @@ def add_experimental_data_to_ch3shift(ch3shift,experimental):
     print('Done with the addition of experimental data to CH3shift predictions.')
     return ch3shift_copy
                             
-    
-
-def mapping_to_pdb(reference,index,versionPDB='PDBV3',ch3shift_data=None,onlyBB=False): 
-    '''This function maps the chiSq of ppm and ch3shift onto the dataframe reference of the PDB'''
-    print('Mapping onto PDB ...')
-    table=pd.read_csv('nomenclature.txt',delim_whitespace=True)
-    atomtype_bb=['C','CB','CA','N','H','HA']
-
-    counter=0
-    reference_copy=reference.copy()
-    reference_copy['b_factor']=0
-    if ch3shift_data==None:
-        for idx,row in index.iterrows():
-            if not np.isnan(row['ChiSq']):
-                try:
-                    atomInPDB=table[(table.BMRB==row['atomtype']) & (table.residue==row['residue'])][versionPDB].to_list()[0]
-                    print('Atom name in BMRB file {} mapped to {} on your PDB'.format(row['atomtype'],atomInPDB))
-                    sel=reference_copy[(reference_copy.residue_number==row['idPDB']) & (reference_copy.residue_name==row['residue']) & (reference_copy.atom_name==atomInPDB)]
-                    reference_copy.at[sel.index,'b_factor']=row['ChiSq']
-                except:
-                    print('I could not find in the PDB the atom {} of residue {} when mapping the ChiSq'.format(row['atomtype'],row['idPDB']))
-    else:
-        for idx,row in index.iterrows():
-            if not np.isnan(row['ChiSq']):
-                try:
-                    atomInPDB=table[(table.ch3shift==row['atomtype']) & (table.residue==row['residue'])][versionPDB].to_list()[0]
-                    sel=reference_copy[(reference_copy.residue_number==row['idPDB']) & (reference_copy.residue_name==row['residue']) & (reference_copy.atom_name==atomInPDB)]
-                    reference_copy.at[sel.index,'b_factor']=row['ChiSq']
-
-                except:
-                    print('I could not find in the PDB the atom {} of residue {} when mapping the ChiSq'.format(row['atomtype'],row['residue']))
-    print('Done with PDB mapping')
-    return reference_copy
-
-
-def mapping_BB_chi_per_residue(reference,index):
-    '''This function calculates the average of the BB chi-squares per residue, and sets the b-factor of all the atoms in the residue to that average value. Residues with no chi-squares are set their b-factors to -1 so we can distinguish properly "no information" from "low chi-squared".'''
-    reference_copy=reference.copy()
-    reference_copy['b_factor']=-1
-    atomtype_bb=['C','CB','CA','N','H','HA']
-    list_of_residue_numbers=list(set(index['idPDB']))
-
-    for resid in list_of_residue_numbers:
-        residue=index.loc[(index['idPDB']==resid )& (index['atomtype'].isin(atomtype_bb))  &  (index['ChiSq']>0)]
-        mean=residue['ChiSq'].mean()
-        sel=reference_copy[reference_copy.residue_number==resid]
-        reference_copy.at[sel.index,'b_factor']=mean
-    reference_copy.at[reference_copy['b_factor'].apply(np.isnan),'b_factor']=-1
-    return reference_copy
+  
    
 def histogram_plotter(data, step=0.1, feature='Chi-Sq reduced', name='histogram_plot',title='Histogram'): 
     data = np.array(data)
@@ -581,157 +571,122 @@ def histogram_plotter(data, step=0.1, feature='Chi-Sq reduced', name='histogram_
     plt.legend()
     plt.title(title)
     plt.savefig(name)
-#    
-#def gaussian_fitting_parameters(data, name='histogram'):
-#    '''Takes an index object (pandas' dataframe column), fits the binned data to a Gaussian distribution, 
-#    print histogram with real data and fitted curve and returns the values of sigma and mu (std and mean) 
-#    of the fitted curve'''
-#    data = np.array(data)
-#    gaussian_fit = lambda x,a,b,c : a * np.exp(-(x - b)**2.0 / (2 * c**2))
-#    bins = np.arange(0, max(data), 0.2) 
-#    data_entries, bins = np.histogram(data, bins = bins)
-#    print(data_entries)
-#    binscenters = np.array([0.5 * (bins[i] + bins[i+1]) for i in range(len(bins)-1)])
-#    try:
-#    #curve fitting
-#        popt, pcov =  curve_fit(gaussian_fit, xdata=binscenters, ydata=data_entries, p0=[10,1,1])
-#    
-#    #plotting
-#        x_space = np.arange(0, max(data), 0.01) 
-#        plt.figure()
-#        plt.bar(binscenters, data_entries, color = 'navy')
-#        plt.plot(x_space, gaussian_fit(x_space,popt), color = 'darkorange', linewidth = 2, 
-#            label = r'$\sigma$ = {}, $\mu$ = {}'.format(popt[2],popt[1]))
-#
-#        plt.legend()
-#        plt.savefig(name)
-#        return popt[1], popt[2]
-#
-#    except: 
-#        plt.figure()
-#        plt.bar(binscenters, data_entries, color = 'navy')
-#        plt.savefig(name)
-#
-#        return np.nan, np.nan
-#
+    plt.close()
+    
+    
+    
 
+def plotter(df, reference, atomtype):
+    reference_copy = reference.copy()
+    reference_copy['b_factor'] = -1
+    df_selection = df[(df.atomtype == atomtype) & (df.ChiSq>0)]
+#    print(df_selection.columns)
 
-   
-   
-######## OUTPUT FUNCTIONS #############################################
-def output_RMSE_ppm_BB(dataframe):
-
-    print('Preparing output for RMSE for H,HA,C,CB,CA and N ...')
-    atomtype_bb = ['C','CB','CA','N','H','HA']
-    df_RMSE_BB = pd.DataFrame( columns = ['Atom Type','RMSE','Entries used'] )
-    counts_per_atom_type={}
-
-    for atomtype in atomtype_bb:
-        #retrieve values for one atomtype
-        atoms = dataframe[ (dataframe.atomtype==atomtype) & (dataframe.error_squared>0 )]
-        try: 
-            #counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
-            RMSE = (sum(atoms.error_squared.to_list())/len(atoms))**0.5
-            ne = pd.DataFrame([[atomtype,RMSE,len(atoms)]],columns=['Atom Type','RMSE','Entries used'])
-            df_RMSE_BB = df_RMSE_BB.append(ne,ignore_index=True)
-        except ZeroDivisionError:
-            print('For the backbone RMSE predictions, I could not find  predictions for the atomtype {}. Maybe your experimental data contained no entries for it.'.format(atomtype))
-
-       
-    pd.DataFrame.to_csv(df_RMSE_BB,path_or_buf='output_RMSE_ppm_BB.csv',index=False)
-    print('Done')
-
-
-
-def output_chi_squared_BB(dataframe):
-    print('Preparing output for ChiSq for H,HA,C,CB,CA and N ...')
-    atomtype_bb = ['C','CB','CA','N','H','HA']
-    df_chi_BB = pd.DataFrame(columns=['Atom Type','Chi-2 reduced', 'Entries used'])
-    counts_per_atom_type={}
-    for atomtype in atomtype_bb:
-        atoms = dataframe[ (dataframe.atomtype==atomtype) & (dataframe.ChiSq>0) ]
+    for idx,row in  df_selection.iterrows():
         try:
-            counts_per_atom_type.update({'{}'.format(atomtype): len(atoms)})
-            ChiSq_red= atoms['ChiSq'].mean()
-            ne = pd.DataFrame([ [atomtype, ChiSq_red, len(atoms)] ],
-                    columns = ['Atom Type','Chi-2 reduced','Entries used'])
-            df_chi_BB = df_chi_BB.append(ne, ignore_index=True)
-            try:
-                histogram_plotter(atoms['ChiSq'], step=0.1, feature=r'$\chi^2_{red}$', name='histogram_plot_{}'.format(atomtype),title='{}'.format(atomtype))
-            except:
-                print('There was a problem generating histograms of BB chemical shifts for the atom type {}'.format(atomtype))
- 
-        except ZeroDivisionError:
-            print('For the backbone reduced Chi-square predictions, I could not find predictions for the atom type {}. Maybe experimental data contained no entries for it.'.format(atomtype))
-    pd.DataFrame.to_csv(df_chi_BB,path_or_buf='output_chi_squared_BB.csv',index=False)    
-    print('Done')
-
-def output_chi_squared_C_ch3shift(dataframe):
-    print('Preparing output for Cs of CH3shift.')
-    df_chi_c = pd.DataFrame(columns=['residue','Atom Type','Chi-2 reduced','STD', 'Entries used'])
-    carbons_ch3 = {'LEU':['CD1','CD2'],'ILE':['CG2','CD'],'VAL':['CG1','CG2'],'THR':['CG2']}
-
-
-    #### Compute chi-2 metrics ###  
-    for key in carbons_ch3.keys():
-        for at in carbons_ch3[key]:
-            
-            ## selects all the atoms of a residue type (e.g.: LEU) and of a certain atomtype (e.g.:CD2).
-            ## So the idea is that at the end of the iteration, we have an average chi-sq for e.g. all CD2s of all LEUs. 
-            sel_atomtype = ch3shift[ (ch3shift.residue==key) & (ch3shift.atomtype==at) & (ch3shift.ChiSq>0.00)]
-            if len(sel_atomtype)>0:
-                chiSq_red = sel_atomtype.mean()
-                std_chiSq_red = sel_atomtype.std() 
-                ne=pd.DataFrame( [[key,at,chiSq_red,std_chiSq_red,len(sel_atomtype)]], columns = ['residue','Atom Type','Chi-2 reduced','STD','Entries used'] )
-                df_chi_c=df_chi_c.append(ne,ignore_index=True)
-
-            else:
-                ne=pd.DataFrame([[key,at,np.nan,np.nan]],columns=['residue','Atom Type','Chi-2 reduced','Entries used'])
-                df_chi_c=df_chi_c.append(ne,ignore_index=True)
+            idPDB, resi= row['idPDB'], row['residue']
+#            print(idPDB,row['atom_name'][0],residue)
+            sel = reference_copy[(reference_copy.residue_number == idPDB) & (reference_copy.residue_name == resi)]
+            reference_copy.at[sel.index,'b_factor'] = row['ChiSq']
+#            print(idPDB,resi,row['ChiSq'],sel.index)
+        except: 
+            print('I could not find in the PDB the atom {} of residue {}{} when mapping the ChiSq'.format(row['atomtype'], row['idPDB'], row['residue']))
+    return reference_copy
+        #set the b_factor in reference to that value
                 
-    pd.DataFrame.to_csv(df_chi_c,path_or_buf='output_chi_squared_C_ch3shift.csv',index=False)   
-    print('Done')
+        
 
+class visualizer ():
+    def __init__(self, reference=None, ppm_data=None , ch3_data=None): 
+        self.ppm_data = ppm_data
+        self.ch3_data = ch3_data
+        self.reference = reference
 
-def output_chi_squared_H_ppm(dataframe):  
-    print('Preparing output for the ChiSq of side-chain hydrogens predictions from PPM ...')
+    def PDBmapping(self, plotarg='BB'):
+        '''maps results onto a pdb for visualization. Depends on function "plotter" '''
+        
+        if plotarg=='BB':
+            df = self.ppm_data
+            df= df[df.atomtype.isin(['C','CA','CB','HA','H','N']) & (df.ChiSq > 0.000)]
+            os.makedirs('BB_pdbs', exist_ok=True)
 
-    #obtain list of protons 
-    regex=dataframe.atomtype.str.match(r'H[B-Z]+[1-9]*')
-    protons=dataframe[(regex) & (dataframe.ChiSq>0)]
-    
-    #set with computed atomtypes so far so avoid repetitions
-    computed=set()
-    
-    #data frame for data storage 
-    df_chi_Hs=pd.DataFrame(columns=['residue','Atom Type','Chi-2 reduced','Entries used'])
-    
-  
-    for index,row in protons.iterrows():
-        if (row['residue'],row['atomtype']) not in computed:
-            computed.add((row['residue'],row['atomtype']))
-            sel=protons[(protons.residue==row['residue']) & (protons.atomtype==row['atomtype']) & (protons.ChiSq>0)]
-            try: 
-                chiSq_red=sum(sel['ChiSq'])/len(sel['ChiSq'])
-                ne=pd.DataFrame([[row['residue'],row['atomtype'],chiSq_red,len(sel)]],columns=['residue','Atom Type','Chi-2 reduced','Entries used'])
-                df_chi_Hs=df_chi_Hs.append(ne,ignore_index=True)
-            except ZeroDivisionError:
-                print('No entries for proton type {}.'.format(row['atomtype']))
-        else: 
-            pass
-  
-     
-    #creates csv file with results
-    pd.DataFrame.to_csv(df_chi_Hs,path_or_buf='output_chi_squared_H_ppm.csv',index=False)
-    print('Done')
+            for atom in ['C','CA','CB','HA','H','N']:
+                new_reference = plotter(df, self.reference, atom)
+                newPDB = PandasPdb().read_pdb(args.reference)
+                newPDB.df['ATOM']=new_reference 
+                path = os.path.join('.','BB_pdbs', '{}_chi_squared_ppm.pdb'.format(atom))
+                print(path)
+                newPDB.to_pdb(path = path) 
+        
+                
+#
+        elif plotarg=='CH3_carbons':
+            carbons_ch3 = {'LEU':['CD1','CD2'],'ILE':['CG2','CD'],'VAL':['CG1','CG2'],'THR':['CG2']}
+            assert self.ch3_data is not None, 'There is no data from CH3shift'
+            df = self.ch3_data
+            os.makedirs('CH3_pdbs', exist_ok=True)
+            for residue in carbons_ch3.keys():
+                for C in carbons_ch3[residue]:
+                    df_sel = df[(df.residue == residue) & (df.atomtype == C)] #only the carbon of interest 
+                    new_reference = plotter(df_sel,self.reference,C)
+                    newPDB = PandasPdb().read_pdb(args.reference)
+                    newPDB.df['ATOM']=new_reference 
+                    path = os.path.join('.','CH3_pdbs', '{}_{}_chi_squared_ppm.pdb'.format(residue,C))
+                    newPDB.to_pdb(path = path)
+                    
+                    
+    def histogramer_plotter(self):
+        os.makedirs('histograms_BB', exist_ok=True)
+        for atom in ['C','CA','CB','HA','H','N']:
+            df = self.ppm_data
+            df = df[(df.atomtype==atom) & (df.ChiSq>0.000)]
+            try:
+                histogram_plotter(df['ChiSq'], step=0.1, feature=r'$\chi^2_{red}$', name='./histograms_BB/histogram_plot_{}'.format(atom),title='{}'.format(atom))
+            except: 
+                print('There was a problem with the histogram for the atom type {}. Maybe there are no data for it.'.format(atom))
+
+                        
+                        
+    def summary(self, summaryarg='BB'):
+        '''creates .csv files with average results'''
+        
+        os.makedirs('csv_summary', exist_ok=True)
+        
+        if summaryarg == 'BB':
+            print('Generating csv files with RMSD and reduced ChiSq for backbone atoms ...')
+            df = self.ppm_data
+            df = df[(df.atomtype.isin(['C','CA','CB','HA','H','N'])) & (df.ChiSq > 0.000)]
+            df_grouped_chi = df.groupby(['atomtype'])['ChiSq'].agg({'atomtype':'size', 'ChiSq':'mean'}) \
+                .rename(columns={'atomtype':'Entries used','ChiSq':'mean_red_ChiSq'})
+            df_grouped_RMSD = (df.groupby(['atomtype'])['error_squared'].mean())**0.5
+
+            df_grouped_chi.to_csv('./csv_summary/output_chi_squared_BB.csv')
+            df_grouped_RMSD.to_csv('./csv_summary/output_RMSD_BB.csv')
+            
+        elif summaryarg == 'CH3_carbons': 
+            assert self.ch3_data is not None, 'There is no data from CH3shift'
+            print('Generating csv files educed ChiSq for methyl carbons ...')
+            df = self.ch3_data
+            carbons = ['CD1','CD2','CG2','CD','CG1','CG2','CG2']
+            df = df[df.atomtype.isin(carbons) & (df.ChiSq > 0.000)]
+            df_grouped_chi = df.groupby(['residue','atomtype'])['ChiSq'].agg({'atomtype':'size', 'ChiSq':'mean'}) \
+                .rename(columns={'atomtype':'Entries used','ChiSq':'mean_red_ChiSq'})
+            df_grouped_chi.to_csv('./csv_summary/output_chi_squared_CH3.csv')
+        
+        elif summaryarg == 'ppm_protons':
+            print('Generating csv file with protons')
+            df = self.ppm_data
+            sel = df.atomtype.str.match(r'H[B-Z]+[1-9]*')
+            df = df[sel & (df.ChiSq > 0.000)]
+            df_grouped_chi = df.groupby(['residue','atomtype'])['ChiSq'].agg({'atomtype':'size', 'ChiSq':'mean'}) \
+                .rename(columns={'atomtype':'Entries used','ChiSq':'mean_red_ChiSq'})
+            df_grouped_chi.to_csv('./csv_summary/output_chi_squared_H_ppm.csv')
+            
+                
+
 #    
-
-   
-    
-    
-    
-
-    
+#
+#    
 #yy##############################################################################
 ###############              EXECUTION                        ################
 #y##############################################################################
@@ -743,14 +698,15 @@ if __name__=='__main__':
     ########################################################################################################################
     ####   DATA BASES 
     ## Choose PDB nomenclature
-    pdb_options={3:'PDBV3',2:'PDBV2'}
-    versionPDB=pdb_options[args.pdb_nom]
+    pdb_options = {3:'PDBV3',2:'PDBV2'}
+    versionPDB = pdb_options[args.pdb_nom] #args.pdb_nom
     
-    reference=args.reference
+    reference = args.reference #
+    
     try:
-        referencepdb=PandasPdb().read_pdb(reference)
-        reference_df=referencepdb.df['ATOM']
-        reference_df=renumber_sequentially(reference_df,'residue_number','residue_name')
+        referencepdb = PandasPdb().read_pdb(reference)
+        reference_df = referencepdb.df['ATOM']
+        reference_df = renumber_sequentially(reference_df,'residue_number','residue_name')
         referencepdb.df['ATOM'] = renumber_sequentially(reference_df,'residue_number','residue_name')
  
 
@@ -759,15 +715,15 @@ if __name__=='__main__':
         sys.exit('Execution aborted due to missing reference PDB')
         
     #check nomenclature 
-    check_nomenclature(reference_df,versionPDB=versionPDB)
+    check_nomenclature(reference_df, versionPDB = versionPDB)
         
     #Creates pandas data frame for experimental and predictions. 
     experimental, seq_exp = experimental_df(args.experimental) #args.experimental
     predicted, seq_pre = predicted_df(args.bmrb_pre) #args.bmrb_pre
     
     #renumbers according to PDB numbering. New numbering goes into column idPDB
-    experimental = renumbering_to_reference(args.reference,experimental)
-    predicted = renumbering_to_reference(args.reference,predicted)
+    experimental = renumbering_to_reference(reference,experimental) #args.reference
+    predicted = renumbering_to_reference(reference,predicted)
 
 
     #addition of experimental data to 
@@ -786,11 +742,17 @@ if __name__=='__main__':
     #add_error of PPM 
     df_merged=add_error_ppm(df_merged)
     
+    #add extra column with pbd nomenclature
+    df_merged['atom_name'] = df_merged.apply(bmrb_to_pdb2,axis=1)
+    
     
     #deal with equivalent hydrogens. E.g. HE1, HE2, HE3 appearing as HE in experimental
     #but as HE1,HE2,HE3 in predicted. This would lead to having HE,HE1,HE2,HE3 
     #in the compiled merged dataframe. We fix it here. 
     df_merged=eliminate_duplicate_hydrogens(df_merged)
+    
+    #add extra column with pbd nomenclature
+    #df_merged['atom_name'] = df_merged.apply(bmrb_to_pdb2,axis=1)
     
     #Error squared and ChiSq
     df_merged['error_squared']=(df_merged['CS']-df_merged['CS_exp'])**2
@@ -798,11 +760,12 @@ if __name__=='__main__':
     
     
     
-    if bool(args.ch3_shift):
+    if bool(args.ch3_shift):#(args.ch3_shift):
 
         ch3shift=predicted_ch3(args.ch3_shift)
         
         #We discard MET predictions
+            
         ch3shift=ch3shift[ch3shift.residue!='MET']
         
         
@@ -812,36 +775,52 @@ if __name__=='__main__':
         #Error squared and ChiSq
         ch3shift['error_squared']=(ch3shift['CS']-ch3shift['CS_exp'])**2
         ch3shift['ChiSq']=ch3shift['error_squared']/ch3shift['err2']**2
+    else:
+        ch3shift=None
     
-    ### Generating output
+    ### Generating output. 
+    print('NOW WE START WITH RESULTS') 
+    results = visualizer(reference = reference_df, ppm_data = df_merged, ch3_data = ch3shift)
+
     print('Generating output in ',os.getcwd())
-    output_RMSE_ppm_BB(df_merged)
-    output_chi_squared_BB(df_merged)
-    output_chi_squared_H_ppm(df_merged)
+    # PPM results
+    results.summary(summaryarg = 'BB')
+    results.summary(summaryarg = 'ppm_protons')
+    print(args.pdb_mapping, type(args.pdb_mapping))
+    if args.pdb_mapping=='yes':
+        results.PDBmapping(plotarg = 'BB')
+    if args.histograms=='yes':
+        print('doing histograms')
+        results.histogramer_plotter()
     df_merged.to_csv('summary_PPM.csv')
+    
+
 
     if bool(args.ch3_shift):
+        print('Doing CH3SHIFT')
+        results.summary(summaryarg = 'CH3_carbons')
 
-        output_chi_squared_C_ch3shift(ch3shift)
+        if args.pdb_mapping=='yes':
+            results.PDBmapping(plotarg = 'CH3_carbons')
         ch3shift.to_csv('summary_CH3shift.csv')
-    
-    #mapping PPM chi squared
-    newPDB=PandasPdb().read_pdb(args.reference)
-    newPDB.df['ATOM']=mapping_to_pdb(newPDB.df['ATOM'],df_merged,versionPDB=versionPDB)
-    newPDB.to_pdb(path='reference_chi_squared_ppm.pdb')
-   
-    #mapping PPM BB-average chi-squared per residue. 
-    PDB_BB_average_per_residue=PandasPdb().read_pdb(args.reference)
-    PDB_BB_average_per_residue.df['ATOM']= mapping_BB_chi_per_residue(PDB_BB_average_per_residue.df['ATOM'],df_merged)
-    PDB_BB_average_per_residue.to_pdb(path='reference_BB_chi_squared_averaged_residue_ppm.pdb')
-    
-    if bool(args.ch3_shift):
-
-        #mappinig ch3shift chi squared
-        newPDB=PandasPdb().read_pdb(args.reference)
-        newPDB.df['ATOM']=mapping_to_pdb(newPDB.df['ATOM'],ch3shift,versionPDB=versionPDB,ch3shift_data=True)
-        newPDB.to_pdb(path='reference_chi_squared_ch3shift.pdb')
-        
+#    
+#    #mapping PPM chi squared
+#    newPDB=PandasPdb().read_pdb(args.reference)
+#    newPDB.df['ATOM']=mapping_to_pdb(newPDB.df['ATOM'],df_merged,versionPDB=versionPDB)
+#    newPDB.to_pdb(path='reference_chi_squared_ppm.pdb')
+#   
+#    #mapping PPM BB-average chi-squared per residue. 
+#    PDB_BB_average_per_residue=PandasPdb().read_pdb(args.reference)
+#    PDB_BB_average_per_residue.df['ATOM']= mapping_BB_chi_per_residue(PDB_BB_average_per_residue.df['ATOM'],df_merged)
+#    PDB_BB_average_per_residue.to_pdb(path='reference_BB_chi_squared_averaged_residue_ppm.pdb')
+#    
+#    if bool(args.ch3_shift):
+#
+#        #mappinig ch3shift chi squared
+#        newPDB=PandasPdb().read_pdb(args.reference)
+#        newPDB.df['ATOM']=mapping_to_pdb(newPDB.df['ATOM'],ch3shift,versionPDB=versionPDB,ch3shift_data=True)
+#        newPDB.to_pdb(path='reference_chi_squared_ch3shift.pdb')
+#        
 
 ##################################################################################################3
        
