@@ -674,8 +674,8 @@ class visualizer ():
             print('Generating csv files with RMSD and reduced ChiSq for backbone atoms ...')
             df = self.ppm_data
             df = df[(df.atomtype.isin(['C','CA','CB','HA','H','N'])) & (df.ChiSq > 0.000)]
-            df_grouped_chi = df.groupby(['atomtype'])['ChiSq'].agg({'atomtype':'size', 'ChiSq':'mean'}) \
-                .rename(columns={'atomtype':'Entries used','ChiSq':'mean_red_ChiSq'})
+            df_grouped_chi =  df.groupby(['atomtype']).agg(entries_used=pd.NamedAgg(column='ChiSq', aggfunc="count"),
+                    mean_red_ChiSq=pd.NamedAgg(column='ChiSq', aggfunc='mean'))
             df_grouped_RMSD = (df.groupby(['atomtype'])['error_squared'].mean())**0.5
 
             df_grouped_chi.to_csv('./csv_summary/output_chi_squared_BB.csv')
@@ -686,9 +686,11 @@ class visualizer ():
             print('Generating csv files educed ChiSq for methyl carbons ...')
             df = self.ch3_data
             carbons = ['CD1','CD2','CG2','CD','CG1','CG2','CG2']
+         
             df = df[df.atomtype.isin(carbons) & (df.ChiSq > 0.000)]
-            df_grouped_chi = df.groupby(['residue','atomtype'])['ChiSq'].agg({'atomtype':'size', 'ChiSq':'mean'}) \
-                .rename(columns={'atomtype':'Entries used','ChiSq':'mean_red_ChiSq'})
+            print(df)
+            df_grouped_chi = df.groupby(['residue','atomtype']).agg(entries_used=pd.NamedAgg(column='ChiSq', aggfunc="count"),
+                    mean_red_ChiSq=pd.NamedAgg(column='ChiSq', aggfunc='mean'))
             df_grouped_chi.to_csv('./csv_summary/output_chi_squared_CH3.csv')
         
         elif summaryarg == 'ppm_protons':
@@ -696,8 +698,8 @@ class visualizer ():
             df = self.ppm_data
             sel = df.atomtype.str.match(r'H[B-Z]+[1-9]*')
             df = df[sel & (df.ChiSq > 0.000)]
-            df_grouped_chi = df.groupby(['residue','atomtype'])['ChiSq'].agg({'atomtype':'size', 'ChiSq':'mean'}) \
-                .rename(columns={'atomtype':'Entries used','ChiSq':'mean_red_ChiSq'})
+            df_grouped_chi =df.groupby(['residue','atomtype']).agg(entries_used=pd.NamedAgg(column='ChiSq', aggfunc="count"),
+                  mean_red_ChiSq=pd.NamedAgg(column='ChiSq', aggfunc='mean'))
             df_grouped_chi.to_csv('./csv_summary/output_chi_squared_H_ppm.csv')
             
                 
@@ -744,7 +746,7 @@ if __name__=='__main__':
 
     #Pandas dataframe with experimental data
     experimental, seq_exp = experimental_df(args.experimental) #args.experimental
-    
+    print(experimental.columns) 
     #Renumbering of residues in the experimental dataframe to reference. New numbering goes into column idPDB
     experimental = renumbering_to_reference(reference,experimental) #args.reference
 
