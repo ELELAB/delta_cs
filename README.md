@@ -1,7 +1,8 @@
 # delta_cs
-Software to compare experimental NMR chemical shifts with those predicted by PPM and CH3shift on molecular ensembles
-delta_CS.py performs a comparison of predicted chemical shifts (from either PPM or ch3shift) with experimental values available on the BMRB database. The comparison is reported as two different metrics: RMSD (only PPM) and a reduced chi-squared. The latter is defined as the ratio of the squared difference of chemical shift prediction and experimental value to the error of the predictor for the specific atom type (these errors are provided by PPM and CH3Shift and invoked during the pipeline). 
-The script considers possible differences in the nomenclature used in the PPM/CH3shift output, particularly challenging for protons, the nomenclature of the reference PDB and the nomenclature in the BMRB database. This can be useful, for instance, in cases where the full-length variant is not used. The only requirement is that reference PDB must not contain non-canonical residues, such as capping groups, that are not defined in the forcefield CHARMM27. 
+Software to compare experimental NMR chemical shifts with those predicted by PPM and CH3shift on molecular ensembles.
+
+*delta_CS.py* performs a comparison of predicted chemical shifts (from either PPM or ch3shift) with experimental values available on the BMRB database. The comparison is reported as two different metrics: RMSD (only PPM) and a reduced chi-squared. The latter is defined as the ratio of the squared difference of chemical shift prediction and experimental value to the error of the predictor for the specific atom type (these errors are provided by PPM and CH3Shift and invoked during the pipeline). 
+The script considers possible differences in the nomenclature used in the PPM/CH3shift output, particularly challenging for protons, the nomenclature of the reference PDB and the nomenclature in the BMRB database. Additionally, it performs alignment of the sequence in the deposited BMRB entry and the reference PDB. This can be useful, for instance, in cases where the full-length variant is not used. The only requirement is that reference PDB must not contain non-canonical residues, such as capping groups, that are not defined in the forcefield CHARMM27. 
 
 **REQUIREMENTS**
 
@@ -16,7 +17,7 @@ delta_CS.py must be run with using python 3.7 and has the following package depe
 - argparse
 - pynmrstar
 
-delta_CS.py relies on two auxiliary files contained in the folder *aux_files*, which must be located in the same folder as delta_CS.py:
+*delta_CS.py* relies on two auxiliary files contained in the folder *aux_files*, which must be located in the same folder as delta_CS.py:
 - error_protons_ppm.txt (error for the chemical shift predictions of the different proton types by ppm).
 - nomenclature.txt (nomenclature equivalencies across PDB, CH3Shift and PPM)
 
@@ -24,7 +25,7 @@ delta_CS.py relies on two auxiliary files contained in the folder *aux_files*, w
 
 **USE**
 
-An example call of delta_CS.py would look the following:
+An example call of *delta_CS.py* would look the following:
 >>  python delta_CS.py -exp BMRBENTRY -bp PATH_TO_BMDB.DAT_FROM_PPM  -ref PATH_TO_YOUR_PDB_REFERENCE -pdb_mapping yes -histograms yes
 
 - -exp (mandatory): entry of the BMRB id for comparison. 
@@ -46,7 +47,7 @@ The following output folders are created:
 
 *PPM: path to -pb must be provided*
 
-1. csv_summary: with files
+1. csv_summary: with the files
     I.  'output_RMSD_BB.csv': contains the per-atom-type average RMSD of the predictions for backbone and CB atoms.
     II. 'output_chi_quared_BB.csv': contains the per-atom-type average reduced chi-squared of the predictions for backbone and CB atoms.
     III. 'output_chi_squared_H_ppm.csv': contains the per-atom-type average reduced chi-squared of the predictions for protons.
