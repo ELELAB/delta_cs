@@ -49,9 +49,13 @@ The following output folders are created:
 
 1. csv_summary: with the files
     I.  'output_RMSD_BB.csv': contains the per-atom-type average RMSD of the predictions for backbone and CB atoms.
+    
     II. 'output_chi_quared_BB.csv': contains the per-atom-type average reduced chi-squared of the predictions for backbone and CB atoms.
+    
     III. 'output_chi_squared_H_ppm.csv': contains the per-atom-type average reduced chi-squared of the predictions for protons.
+    
     IV. 'summary_PPM.csv': summary for all atoms.
+    
 2. CH3_pdbs (-pdb_mapping must be set to yes): contains pdbs where the reduced chi-squared values of a specific atom (methyl C) are mapped as a B-factor of the CA of that residue. For each atom type, there is one .pdb file collecting all reduced chi-squared values of that atom type.
 3. Histogram (-histograms must be set to yes): plots with the distribution of the chi-square vales per atom type. It reports what percentage of the compute values are below 5.
 4. BB_pdbs: (-pdb_mapping must be set to yes): contains pdbs where the reduced chi-squared values of a specific atom (backbone and CB) are mapped as a B-factor of the CA of that residue. For each atom type, there is one PDB file collecting all reduced chi-squared values of that atom type. 
