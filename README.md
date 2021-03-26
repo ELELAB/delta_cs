@@ -48,8 +48,7 @@ The following output folders are created:
 *PPM: path to -pb must be provided*
 
 1. csv_summary: with the files
-    I.  'output_RMSD_BB.csv': contains the per-atom-type average RMSD of the predictions for backbone and CB atoms.
-    
+    I.  'output_RMSD_BB.csv': contains the per-atom-type average RMSD of the predictions for backbone and CB atoms. \n
     II. 'output_chi_quared_BB.csv': contains the per-atom-type average reduced chi-squared of the predictions for backbone and CB atoms.
     
     III. 'output_chi_squared_H_ppm.csv': contains the per-atom-type average reduced chi-squared of the predictions for protons.
