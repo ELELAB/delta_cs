@@ -22,7 +22,10 @@ delta_CS.py relies on two auxiliary files contained in the folder *aux_files*, w
 
 delta_CS.py assumes installation of gromacs (non mpi. You must be able to call gromacs using the alias gmx).
 
+
+
 **USE**
+
 An example call of delta_CS.py would look the following:
 >>  python delta_CS.py -exp BMRBENTRY -bp PATH_TO_BMDB.DAT_FROM_PPM  -ref PATH_TO_YOUR_PDB_REFERENCE -pdb_mapping yes -histograms yes
 
@@ -33,7 +36,10 @@ An example call of delta_CS.py would look the following:
 ⦁	-pdb_mapping: yes/no (default: yes). Controls the ouput of the obtained reduced chi-squared as B-factor to visualize on Pymol (per atom type)
 ⦁	-histograms: yes/no (default: yes). Controls the ouput of histograms of obtained reduced chi-squared for backbone and CB atoms (per atom type). If set to yes, the -pb flag must contain a path to the PPM output file. Otherwise, an exception will be raised.  
 
+
+
 **OUTPUT** 
+
 *CH3shift: path to -ch3 flag must be provided*
 The following output folders are created:
 1. csv_summary: contains the files 'summary_CH3shift.csv' and 'output_chi_squared_CH3.csv'. The former lists the reduced chi-squared metric for all those atoms for which the computation was possible. The latter provides a per-atom-type average of the obtained chi-squared metrics. 
