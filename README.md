@@ -4,6 +4,7 @@ delta_CS.py performs a comparison of predicted chemical shifts (from either PPM 
 The script considers possible differences in the nomenclature used in the PPM/CH3shift output, particularly challenging for protons, the nomenclature of the reference PDB and the nomenclature in the BMRB database. This can be useful, for instance, in cases where the full-length variant is not used. The only requirement is that reference PDB must not contain non-canonical residues, such as capping groups, that are not defined in the forcefield CHARMM27. 
 
 **REQUIREMENTS**
+
 delta_CS.py must be run with using python 3.7 and has the following package dependencies: 
 - NumPy
 - sys
