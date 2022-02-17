@@ -1,3 +1,11 @@
+Computational Biology Laboratory, Danish Cancer Society Research Center, 2100, Copenhagen, Denmark 
+Cancer Systems Biology, Health and Technology Department, Section for Bioinformatics, 2800, Lyngby, Denmark
+
+Repository associated to the publication:
+
+Bcl-xL dynamics under the lens of protein structure networks. Valentina Sora, Dionisio Sanchez, Elena Papaleo*, J Phys Chem B . 2021 May 6;125(17):4308-4320. doi: 10.1021/acs.jpcb.0c11562. Epub 2021 Apr 13.
+
+
 # delta_cs
 Software to compare experimental NMR chemical shifts with those predicted by PPM and CH3shift on molecular ensembles.
 
